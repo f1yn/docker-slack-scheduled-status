@@ -1,4 +1,5 @@
 .idea/
 keys/
+persist/
 schedule.toml
 install.sh

@@ -97,9 +97,9 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
             continue;
         }
 
-        // parse the toml date values
-        const [startHour, startMinute, startSecond] = itemRef.start.split(':');
-        const [finalHour, finalMinute, finalSecond] = (itemRef.duration || itemRef.end).split(':');
+        // parse the toml date values to integers (prevent 24 hours times from creating abominable values)
+        const [startHour, startMinute, startSecond] = itemRef.start.split(':').map(v => parseInt(v));
+        const [finalHour, finalMinute, finalSecond] = (itemRef.duration || itemRef.end).split(':').map(v => parseInt(v));
 
         // skip items that have improper durations
         if (itemRef.duration && finalHour > (maximumDaySpan - 1) * 24) {
