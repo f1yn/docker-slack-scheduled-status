@@ -1,6 +1,6 @@
 # Slack Scheduled Status for Docker
 
-This is a lightweight, containerized way to periodically update your Slack status based on a schedule.
+This is a lightweight, containerized way to update your Slack status based on a schedule.
 
 - Supports scheduled status spanning multiple days (up to 24 hours, can be extended with environment variables)
 - Supports nested scheduled status (i.e 21:00 to 23:30, but also 22:00 to 23:00 on the same day)
@@ -39,6 +39,8 @@ This scheduler uses a toml format, which has the following rules:
 - `days` can be `"weekdays"`, or `"everyday"`, but can also be an array of short-named days
   in the local of the server - uses `Date.prototype.toLocaleString('your-server-locale', { weekday: 'short' })`
 - Each item (toml table) name must be unique
+- `start` must be provided as a 24h time
+- `end` can be provided as a 24h time on the same day, while `duration` can be used for statuses that span over multiple days
 
 ```toml
 # The id of the scheduled status

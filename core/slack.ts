@@ -30,7 +30,9 @@ async function fetchOrSubmitJson(uri: string, bodyToSend = null) {
             options.body = JSON.stringify(bodyToSend);
         }
 
-        return (await fetch(uri, options)).json();
+        const result = (await fetch(uri, options)).json();
+        if (result.error) throw new Error(result.error);
+        return result;
     } catch (requestOrParseError) {
         // override error message for debug
         requestOrParseError.message = [
