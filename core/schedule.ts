@@ -85,15 +85,15 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
         const itemRef = lastLoadedParsedToml[id];
 
         if (!itemRef.icon) {
-            log.warn(`Scheduled status without icons are not supported (check the status [${id$}] for issues)`);
+            log.warning(`Scheduled status without icons are not supported (check the status [${id$}] for issues)`);
             continue;
         }
 
         // create the list of week days that this schedule will be valid - validate that the schedule is valid
         const validWeekdays = determineValidWeekdaysForSchedule(itemRef.days);
         if (!validWeekdays.length) {
-            log.warn(`No valid weekdays or alias could be determined from this item (check the status [${id}] for issues)`);
-            log.warn(`(hint): LOCALE is set to "${locale}" and supported values are ${SCHEDULE_EVERYDAY.join(', ')}`);
+            log.warning(`No valid weekdays or alias could be determined from this item (check the status [${id}] for issues)`);
+            log.warning(`(hint): LOCALE is set to "${locale}" and supported values are ${SCHEDULE_EVERYDAY.join(', ')}`);
             continue;
         }
 
@@ -103,8 +103,8 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
 
         // skip items that have improper durations
         if (itemRef.duration && finalHour > (maximumDaySpan - 1) * 24) {
-            log.warn(`While possible, schedule items spanning more than ${totalDaySpan} days can causes weird behaviors.`);
-            log.warn(`Please correct this (check the status [${id}] for issues)`);
+            log.warning(`While possible, schedule items spanning more than ${totalDaySpan} days can causes weird behaviors.`);
+            log.warning(`Please correct this (check the status [${id}] for issues)`);
             continue;
         }
 
