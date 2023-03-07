@@ -59,7 +59,7 @@ let lastSetStatusById;
 
 createTaskScheduler(taskSchedulerInterval, async function() {
     // load and check existing slack schedule and look for updates
-    const [slackSchedule, scheduleDidChange, knownIcons] = await reloadScheduleWithValidation();
+    const [slackSchedule, scheduleDidChange, knownIcons, settings] = await reloadScheduleWithValidation();
 
     // if new schedule is loading during this task run - reset the lastSetId
     if (scheduleDidChange) {

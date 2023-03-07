@@ -62,6 +62,15 @@ days = ["Mon", "Tue", "Wed", "Thu"]
 doNotDisturb = true
 ```
 
+## Additional settings
+A `[settings]` area can be added with the following settings
+
+```toml
+[settings]
+# Ignored icons will not override the next scheudled status (i.e focus time statues, grabbing a bite, .e.c.t)
+ignoredIcons = [':icon1:', ':icon2:']
+```
+
 ## Setting up the docker/podman environment
 
 > `docker` and `podman` commands are interchangeable and are built around the same OCI specifications. The examples

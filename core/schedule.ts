@@ -17,6 +17,10 @@ export interface ScheduleItem {
     doNotDisturb: boolean,
 }
 
+export interface ScheduleSettings {
+    ignoredIcons: string[]
+}
+
 type SlackSchedule = ScheduleItem[];
 
 // Compute all named days of the week, but using the locale provided above
@@ -73,7 +77,7 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
     // it's possible for a single schedule to span multiple days, so it's often cheaper computationally
     // to iterate over the entire computed list
     const processedSchedule = [];
-    const recognizedIcons = new Set();
+    const recognizedIcons = new Set<string>();
 
     // get relevant date values
     const currentTime = new Date();
@@ -81,8 +85,17 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
     const currentMonth = currentTime.getMonth();
     const currentDate = currentTime.getDate();
 
+    // Default value for settings
+    let settingsRef = { ignoredIcons: [] } as ScheduleSettings;
+
     for (const id of Object.keys(lastLoadedParsedToml)) {
         const itemRef = lastLoadedParsedToml[id];
+
+        if (id === 'settings') {
+            // bind the loaded settings value (TODO: validate)
+            settingsRef = itemRef;
+            continue;
+        }
 
         if (!itemRef.icon) {
             log.warning(`Scheduled status without icons are not supported (check the status [${id$}] for issues)`);
@@ -136,7 +149,12 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
         recognizedIcons.add(itemRef.icon);
     }
 
-    return [processedSchedule, scheduleDidChange, Array.from(recognizedIcons)];
+    // make sure that ignored icons are added to recognized icons (avoid override)
+    for (const icon of settingsRef.ignoredIcons) {
+        recognizedIcons.add(icon);
+    }
+
+    return [processedSchedule, scheduleDidChange, Array.from(recognizedIcons), settingsRef];
 }
 
 /**
