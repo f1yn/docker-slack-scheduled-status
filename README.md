@@ -60,15 +60,22 @@ message = [
 days = ["Mon", "Tue", "Wed", "Thu"]
 # Will set the Slack profile to "Do Not Disturb" when set. Will unset once this scheduled period is complete
 doNotDisturb = true
+# Will assert it's satus if an invalid state is detected (needs assertiveInterval in settings to be enabled). This is
+# most useful for longer statues that might be disabled, but are tedious to re-enable by hand if overridden in slack.
+assertive = false
 ```
 
 ## Additional settings
-A `[settings]` area can be added with the following settings
+A `[settings]` area can be added with the following settings:
 
 ```toml
 [settings]
-# Ignored icons will not override the next scheudled status (i.e focus time statues, grabbing a bite, .e.c.t)
+# Ignored icons will not override the next scheduled status (i.e focus time statues, grabbing a bite, .e.c.t)
 ignoredIcons = [':icon1:', ':icon2:']
+# Enables assertive mode, allowing the ability to re-apply marked scheduled items when `assertive: true` is passed.
+# Value is a numeric interval of the SCHEDULER_INTERVAL_SECONDS value (i.e a value of 3 will trigger an assertion (if
+# applicable every 3 * SCHEDULER_INTERVAL_SECONDS
+assertiveInterval = 3
 ```
 
 ## Setting up the docker/podman environment
