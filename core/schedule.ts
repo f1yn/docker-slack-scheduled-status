@@ -34,6 +34,10 @@ export interface ScheduleItem {
     assertive: boolean,
 }
 
+export interface SelectedScheduleItem extends ScheduleItem{
+    message: string
+}
+
 export type PreprocessedSchedule = {
     [key: string]: PreprocessedScheduleItem
 }
@@ -192,7 +196,7 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
  * Returns the most relevant scheduled status if it matches the current time window
  * @param schedule
  */
-export function getExpectedStatusFromSchedule(schedule: SlackSchedule) : ScheduleItem | { id: null } {
+export function getExpectedStatusFromSchedule(schedule: SlackSchedule) : SelectedScheduleItem | { id: null } {
     const currentTime = new Date();
     const currentWeekday = currentTime.toLocaleString(locale, { weekday: 'short' }).toLowerCase();
 

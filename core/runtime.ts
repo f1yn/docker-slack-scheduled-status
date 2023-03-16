@@ -2,7 +2,7 @@ import { log } from './deps.ts'
 
 import {
     reloadScheduleWithValidation,
-    getExpectedStatusFromSchedule, findNextExpectedScheduledStatus, ScheduleItem,
+    getExpectedStatusFromSchedule, findNextExpectedScheduledStatus, SelectedScheduleItem,
 } from './schedule.ts';
 
 import {
@@ -71,7 +71,7 @@ createTaskScheduler(taskSchedulerInterval, async function() {
 
 
     // check the current expected status based on current time
-    const currentExpectedStatus = getExpectedStatusFromSchedule(slackSchedule) as ScheduleItem;
+    const currentExpectedStatus = getExpectedStatusFromSchedule(slackSchedule) as SelectedScheduleItem;
 
     let statusShouldReassert = false;
 
