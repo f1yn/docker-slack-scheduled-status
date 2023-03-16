@@ -2,7 +2,7 @@ import { log } from './deps.ts'
 
 import {
     reloadScheduleWithValidation,
-    getExpectedStatusFromSchedule, findNextExpectedScheduledStatus,
+    getExpectedStatusFromSchedule, findNextExpectedScheduledStatus, ScheduleItem,
 } from './schedule.ts';
 
 import {
@@ -40,7 +40,7 @@ function getMillisecondsUntilNextTask(intervalInSeconds : number) : number {
  * @param intervalInSeconds 1,2,3,4,5,6,10,15,20, or 30
  * @param task
  */
-export function createTaskScheduler(intervalInSeconds, task) {
+export function createTaskScheduler(intervalInSeconds : number, task : () => Promise<void>) {
     return async function executeTask(): Promise<void> {
         try {
             await task();
@@ -54,8 +54,11 @@ export function createTaskScheduler(intervalInSeconds, task) {
 }
 
 
-// statue for status
-let lastSetStatusById;
+// state for for status
+let lastSetStatusById : string | null;
+
+// state for assertive move counter
+let assertiveIntervalCounter = 0;
 
 createTaskScheduler(taskSchedulerInterval, async function() {
     // load and check existing slack schedule and look for updates
@@ -66,13 +69,29 @@ createTaskScheduler(taskSchedulerInterval, async function() {
         lastSetStatusById = null;
     }
 
+
     // check the current expected status based on current time
-    const currentExpectedStatus = getExpectedStatusFromSchedule(slackSchedule);
+    const currentExpectedStatus = getExpectedStatusFromSchedule(slackSchedule) as ScheduleItem;
+
+    let statusShouldReassert = false;
+
+    if (settings.assertiveInterval && currentExpectedStatus.assertive) {
+        // We've incremented to the max interval,so reset the status so we can check
+        if (assertiveIntervalCounter === settings.assertiveInterval) {
+            log.info('[assertive] the currently expected status is assertive and we have reached the interval point. Forcing load for comparison');
+            assertiveIntervalCounter = 0;
+            statusShouldReassert = true;
+            
+        } else {
+            // increment
+            assertiveIntervalCounter += 1;
+        }
+    }
 
     // if the expected status exactly matches what we last set, do nothing and exit task
     // if status was customised in Slack before the next interval becomes active - we can ignore
-    if (lastSetStatusById && currentExpectedStatus.id === lastSetStatusById) {
-        log.info('expected status already synchronised locally - skipping load/apply');
+    if (!statusShouldReassert && lastSetStatusById && currentExpectedStatus.id === lastSetStatusById) {
+        log.info('expected status already synchronized locally - skipping load/apply');
         return;
     }
 
@@ -97,7 +116,16 @@ createTaskScheduler(taskSchedulerInterval, async function() {
     // detect if the Slack status does not include a known icon in our schedule
     // this is a limitation, but is much less expensive and fault-prone than comparing messages or assuming Slack will be
     // handling/serializing datetime values the same way Deno is (which is not well documented and likely subject to change)
-    if (currentSlackStatus.icon && !knownIcons.includes(currentSlackStatus.icon)) {
+    // if the schedule is assertive, do a similar check, but simply opt out if it's the same
+    const isUsingUnrecognizedIcon = currentSlackStatus.icon && !knownIcons.includes(currentSlackStatus.icon);
+
+
+    if (statusShouldReassert) {
+        if (!isUsingUnrecognizedIcon) {
+            log.info('[assertive] the remote status is already compliant with the one we expect, so no need to override');
+            return;
+        }
+    } else if (isUsingUnrecognizedIcon) {
         log.info('unrecognized icon was set - skipping this scheduled status');
         // To prevent redundant lookups, set the lastSetStatusById to match the new status
         // this will make this script avoid overriding the status until the next scheduled status occurs

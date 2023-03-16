@@ -7,18 +7,35 @@ const locale = Deno.env.get('LOCALE') || 'en-US';
 // accounts for scheduled status that lapse from yesterday into today
 const maximumDaySpan = parseInt(Deno.env.get('SCHEDULER_MAX_DAYSPAN') || '2');
 
+interface PreprocessedScheduleItem {
+    start: string,
+    end?: string,
+    duration?: string,
+    icon: string,
+    message: string[] | string,
+    days: string[] | string,
+    doNotDisturb?: boolean, 
+    assertive?: boolean, 
+}
+
+interface ScheduleSettings {
+    ignoredIcons?: string[],
+    assertiveInterval?: number,
+}
+
 export interface ScheduleItem {
     id: string,
     startTime: Date,
     endTime: Date,
     icon: string,
     message: string[] | string,
-    validWeekdays: [],
+    validWeekdays: string[],
     doNotDisturb: boolean,
+    assertive: boolean,
 }
 
-export interface ScheduleSettings {
-    ignoredIcons: string[]
+export type PreprocessedSchedule = {
+    [key: string]: PreprocessedScheduleItem
 }
 
 type SlackSchedule = ScheduleItem[];
@@ -38,7 +55,7 @@ const SCHEDULE_WEEKDAYS = SCHEDULE_EVERYDAY.filter((_i, index) => index && index
 const SCHEDULE_4D = SCHEDULE_EVERYDAY.filter((_i, index) => index && index < 5);
 
 let lastLoadedRawToml : string;
-let lastLoadedParsedToml;
+let lastLoadedParsedToml : { [key: string]: any };
 
 /**
  * Converts an unrefined days value from the schedule.toml into a usable set of weekdays
@@ -55,28 +72,52 @@ function determineValidWeekdaysForSchedule(weekdayValue : string | string[]) : s
     return weekdayValue
         // do our best to stringify potentially bad toml
         .map((rawValue) => `${rawValue}`.toLowerCase())
-        // check it against known localised days of the week
+        // check it against known localized days of the week
         .filter((value) => SCHEDULE_EVERYDAY.includes(value))
+}
+
+
+/**
+ * Destructures and filters items in the parsed. Returns a boolean flag if the last loaded schema does not match
+ * @param rawScheduleToml 
+ * @returns 
+ */
+function parseAndFilterSchedule(rawScheduleToml: string) : [PreprocessedSchedule, ScheduleSettings, boolean] {
+    // Detect if we detected a potential schedule rewrite (or hasn't been parsed yet
+    const scheduleDidChange = rawScheduleToml !== lastLoadedRawToml;
+
+    if (scheduleDidChange) {
+        lastLoadedParsedToml = parseToml(rawScheduleToml);
+        lastLoadedRawToml = rawScheduleToml;
+    }
+
+    // separate the settings early-on so we can use them to alter any calculations we might need to do
+    const {
+        settings,
+        ...preprocessedSchedule
+    } = lastLoadedParsedToml;
+
+    // TODO: early filtering/default settings here
+
+    return [preprocessedSchedule, settings || {}, scheduleDidChange];
 }
 
 /**
  * Loads schedule.toml from the filesystem, attempt to parse and will return the parsed files
  */
-export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, boolean, string[]]> {
-    // Always read the most recent schedule from the fs
-    const rawToml = await Deno.readTextFile('/schedule.toml');
-
-    // Detect if we detected a potential schedule rewrite (or hasn't been parsed yet
-    const scheduleDidChange = rawToml !== lastLoadedRawToml;
-
-    if (scheduleDidChange) {
-        lastLoadedParsedToml = parseToml(rawToml);
-        lastLoadedRawToml = rawToml;
-    }
+export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, boolean, string[], ScheduleSettings]> {
+    const [
+        unprocessedSchedule,
+        settings,
+        scheduleDidChange
+    ] = parseAndFilterSchedule(
+         // Always read the most recent schedule from the fs
+        await Deno.readTextFile('/schedule.toml')
+    );
 
     // it's possible for a single schedule to span multiple days, so it's often cheaper computationally
     // to iterate over the entire computed list
-    const processedSchedule = [];
+    const processedSchedule = [] as ScheduleItem[];
     const recognizedIcons = new Set<string>();
 
     // get relevant date values
@@ -85,20 +126,9 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
     const currentMonth = currentTime.getMonth();
     const currentDate = currentTime.getDate();
 
-    // Default value for settings
-    let settingsRef = { ignoredIcons: [] } as ScheduleSettings;
-
-    for (const id of Object.keys(lastLoadedParsedToml)) {
-        const itemRef = lastLoadedParsedToml[id];
-
-        if (id === 'settings') {
-            // bind the loaded settings value (TODO: validate)
-            settingsRef = itemRef;
-            continue;
-        }
-
+    for (const [id, itemRef] of Object.entries(unprocessedSchedule)) {
         if (!itemRef.icon) {
-            log.warning(`Scheduled status without icons are not supported (check the status [${id$}] for issues)`);
+            log.warning(`Scheduled status without icons are not supported (check the status [${id}] for issues)`);
             continue;
         }
 
@@ -112,11 +142,11 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
 
         // parse the toml date values to integers (prevent 24 hours times from creating abominable values)
         const [startHour, startMinute, startSecond] = itemRef.start.split(':').map(v => parseInt(v));
-        const [finalHour, finalMinute, finalSecond] = (itemRef.duration || itemRef.end).split(':').map(v => parseInt(v));
+        const [finalHour, finalMinute, finalSecond] = (itemRef.duration || itemRef.end || '').split(':').map(v => parseInt(v));
 
         // skip items that have improper durations
         if (itemRef.duration && finalHour > (maximumDaySpan - 1) * 24) {
-            log.warning(`While possible, schedule items spanning more than ${totalDaySpan} days can causes weird behaviors.`);
+            log.warning(`While possible, schedule items spanning more than ${2} days can causes weird behaviors.`);
             log.warning(`Please correct this (check the status [${id}] for issues)`);
             continue;
         }
@@ -129,7 +159,7 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
             const startTime = new Date(currentYear, currentMonth, currentDate - dayOffset, startHour, startMinute, startSecond);
             // determine the  end time for this scheduled status
             const endTime = itemRef.duration ?
-                // if a duration is present then apply it to the start time
+                // if a duration is present then apply list to the start time
                 new Date(currentYear, currentMonth, currentDate - dayOffset, startHour + finalHour, startMinute + finalMinute, startSecond + finalSecond) :
                 // otherwise, treat as an exact (same-day) end time
                 new Date(currentYear, currentMonth, currentDate - dayOffset, finalHour, finalMinute, finalSecond);
@@ -142,7 +172,8 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
                 message: Array.isArray(itemRef.message) ? itemRef.message : [itemRef.message],
                 doNotDisturb: Boolean(itemRef.doNotDisturb),
                 validWeekdays,
-            })
+                assertive: Boolean(itemRef.assertive),
+            });
         }
 
         // save this icon, so we can do a cheap check later on in the primary task loop (is the current status unknown)
@@ -150,18 +181,18 @@ export async function reloadScheduleWithValidation() : Promise<[SlackSchedule, b
     }
 
     // make sure that ignored icons are added to recognized icons (avoid override)
-    for (const icon of settingsRef.ignoredIcons) {
+    for (const icon of (settings.ignoredIcons || [])) {
         recognizedIcons.add(icon);
     }
 
-    return [processedSchedule, scheduleDidChange, Array.from(recognizedIcons), settingsRef];
+    return [processedSchedule, scheduleDidChange, Array.from(recognizedIcons), settings];
 }
 
 /**
  * Returns the most relevant scheduled status if it matches the current time window
  * @param schedule
  */
-export function getExpectedStatusFromSchedule(schedule: SlackSchedule) : ScheduleItem {
+export function getExpectedStatusFromSchedule(schedule: SlackSchedule) : ScheduleItem | { id: null } {
     const currentTime = new Date();
     const currentWeekday = currentTime.toLocaleString(locale, { weekday: 'short' }).toLowerCase();
 
@@ -176,19 +207,15 @@ export function getExpectedStatusFromSchedule(schedule: SlackSchedule) : Schedul
     // The current time is not within any schedule we can see so return null-time
     if (!matchingScheduleItems.length) {
         return {
-            id: '',
-            icon: '',
-            message: '',
-            validWeekdays: [],
-            doNotDisturb: false,
+            id: null
         }
     }
 
     if (matchingScheduleItems.length > 1) {
         // Sort the potential matches to include the smallest possible window
         matchingScheduleItems.sort((a, b) => {
-            const scheduleDurationA = a.endTime - a.startTime;
-            const scheduleDurationB = b.endTime - b.startTime;
+            const scheduleDurationA = Number(a.endTime) - Number(a.startTime);
+            const scheduleDurationB = Number(b.endTime) - Number(b.startTime);
             return scheduleDurationA - scheduleDurationB;
         });
     }
@@ -209,7 +236,7 @@ export function getExpectedStatusFromSchedule(schedule: SlackSchedule) : Schedul
  *    milliseconds until it's expected to take place. If no expected status can be found, it returns null
  * @param schedule
  */
-export function findNextExpectedScheduledStatus(schedule: SlackSchedule) : Array<ScheduleItem, number>|Array<null,null> {
+export function findNextExpectedScheduledStatus(schedule: SlackSchedule) : [ScheduleItem, number] | [null,null] {
     const currentTime = new Date();
     const currentWeekday = currentTime.toLocaleString(locale, { weekday: 'short' }).toLowerCase();
 
@@ -222,13 +249,13 @@ export function findNextExpectedScheduledStatus(schedule: SlackSchedule) : Array
 
     if (allNextPotentialScheduledStatus.length) {
         allNextPotentialScheduledStatus.sort((a, b) => {
-           const distanceUntilEventA = a.startTime - currentTime;
-           const distanceUntilEventB = b.startTime - currentTime;
+           const distanceUntilEventA = Number(a.startTime) -  Number(currentTime);
+           const distanceUntilEventB =  Number(b.startTime) -  Number(currentTime);
            return distanceUntilEventA - distanceUntilEventB;
         });
 
         const [nextPotentialStatus] = allNextPotentialScheduledStatus;
-        return [nextPotentialStatus, nextPotentialStatus.startTime - currentTime];
+        return [nextPotentialStatus, Number(nextPotentialStatus.startTime) - Number(currentTime)];
     }
 
     return [null, null];
