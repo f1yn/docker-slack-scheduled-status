@@ -32,10 +32,15 @@ interface SlackProfileDataSend {
 
 interface SlackProfileDataResponse extends SlackApiResponse, SlackProfileDataSend {}
 
+interface SlackDndDataSend extends SlackApiResponse {
+    num_minutes: number,
+}
+
 interface SlackDndDataResponse extends SlackApiResponse {
     snooze_enabled: boolean,
     ok: boolean
 }
+
 
 /**
  * Convenience wrapper around Deno-fetch that will either `GET` or `POST` to the Slack api with
@@ -105,7 +110,7 @@ export async function publishNewStatusToSlack(scheduleItem : SelectedScheduleIte
 
         log.info(`Attempting to enable Slack DnD for [${scheduleItem.id}] = ${dndDurationInMinutes} minutes`);
         // Slack decided DnD was not using REST-ful design (weird)
-        const result = await fetchOrSubmitJson<null, SlackDndDataResponse>(`https://slack.com/api/dnd.setSnooze?num_minutes=${dndDurationInMinutes}`);
+        const result = await fetchOrSubmitJson<SlackDndDataSend, SlackDndDataResponse>(`https://slack.com/api/dnd.setSnooze`, { num_minutes: dndDurationInMinutes });
 
         if (result.ok) {
             log.info('Slack DnD was set successfully');
