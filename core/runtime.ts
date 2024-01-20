@@ -131,7 +131,7 @@ export function createRuntimeScope(options: RuntimeOptions = {}) {
 }
 
 // Detect if we are a main module (running in podman)
-if (Deno.mainModule.endsWith('core/runtime.ts')) {
+if (import.meta.main) {
 	// autostart execution if that's the case,otherwise assume we are headless and/or in-testing
 	createRuntimeScope().start();
 }
