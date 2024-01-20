@@ -1,4 +1,14 @@
 {
-    "deno.enable": true,
-    "deno.unstable": true
+	"deno.enable": true,
+	"deno.unstable": true,
+	"deno.lint": true,
+	"deno.config": "./deno.json",
+	"editor.formatOnSave": true,
+	"editor.defaultFormatter": "denoland.vscode-deno",
+	"[typescript]": {
+		"editor.defaultFormatter": "denoland.vscode-deno"
+	},
+	"cSpell.words": [
+		"Timepoint"
+	]
 }
